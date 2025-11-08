@@ -1,7 +1,8 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, request, render_template_string, redirect, url_for, session
 import joblib
 
 app = Flask(__name__)
+app.secret_key = 'de_tai_09' 
 model = joblib.load('main_model.pkl')
 
 HTML_TEMPLATE = """
@@ -17,20 +18,18 @@ HTML_TEMPLATE = """
 
   <style>
     :root{
-      --brand:#6750f0;
-      --brand-2:#8e7bff;
-      --bg:#0f172a;
-      --border:rgba(255,255,255,0.14);
-      --text:#e5e7eb;
-      --muted:#9ca3af;
-      --low-bg:#0b3b2a;  --low-chip:#22c55e;
-      --mid-bg:#2a2307;  --mid-chip:#fbbf24;
-      --high-bg:#3a0f16; --high-chip:#f43f5e;
+      --brand:#1e40af;
+      --brand-2:#3b82f6;
+      --bg:#f8fafc;
+      --border:rgba(30,64,175,0.15);
+      --text:#1e293b;
+      --muted:#64748b;
+      --low-bg:#ecfdf5;  --low-chip:#10b981;
+      --mid-bg:#fef3c7;  --mid-chip:#f59e0b;
+      --high-bg:#fee2e2; --high-chip:#ef4444;
     }
     body{
-      background: radial-gradient(1200px 600px at 10% -10%, rgba(142,123,255,.15), transparent 40%),
-                  radial-gradient(1200px 600px at 90% 0%, rgba(103,80,240,.15), transparent 40%),
-                  var(--bg);
+      background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 50%, #e0e7ff 100%);
       color: var(--text);
       font-family: 'Inter', sans-serif;
       min-height: 100vh;
@@ -38,16 +37,30 @@ HTML_TEMPLATE = """
       padding: 30px 12px;
     }
     .app{
-      width:100%; max-width:850px;
-      background: rgba(255,255,255,0.05);
+      width:100%; max-width:1200px;
+      background: #ffffff;
       backdrop-filter: blur(12px);
       border:1px solid var(--border);
       border-radius:20px;
-      box-shadow:0 30px 80px rgba(0,0,0,.4);
+      box-shadow:0 20px 60px rgba(30,64,175,.12);
       overflow:hidden;
       animation:fadeIn .4s ease-out;
     }
     @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+    .main-layout{
+      display:grid;
+      grid-template-columns:280px 1fr 280px;
+      gap:0;
+    }
+    @media (max-width: 1024px){
+      .main-layout{
+        grid-template-columns:1fr;
+      }
+      .left-sidebar, .right-sidebar{
+        display:none;
+      }
+    }
 
     .app-header{
       background:linear-gradient(135deg,var(--brand),var(--brand-2));
@@ -57,19 +70,80 @@ HTML_TEMPLATE = """
     }
     .app-header h3{margin:0;font-weight:700;}
 
-    .app-body{padding:32px;}
-    .field-label{font-weight:600;}
-    .input-group-text{background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--muted);}
-    .form-control{
-      background:rgba(255,255,255,0.06);
-      border:1px solid var(--border);
+    .left-sidebar, .right-sidebar{
+      background:#f1f5f9;
+      padding:28px 22px;
+      border-right:1px solid var(--border);
+    }
+    .right-sidebar{
+      border-right:none;
+      border-left:1px solid var(--border);
+    }
+    .sidebar-title{
+      color:var(--brand);
+      font-size:1rem;
+      font-weight:700;
+      margin:0 0 18px 0;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding-bottom:14px;
+      border-bottom:2px solid rgba(59,130,246,0.3);
+    }
+    .info-item{
+      margin-bottom:14px;
+      font-size:0.85rem;
+      line-height:1.5;
       color:var(--text);
     }
-    .form-control::placeholder{color:#9ca3af;}
+    .info-item:last-child{
+      margin-bottom:0;
+    }
+    .info-item strong{
+      color:#2563eb;
+      display:block;
+      margin-bottom:3px;
+      font-size:0.88rem;
+    }
+    .risk-item{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-bottom:12px;
+      font-size:0.85rem;
+    }
+    .risk-item:last-child{
+      margin-bottom:0;
+    }
+    .risk-badge{
+      display:inline-block;
+      border-radius:10px;
+      padding:3px 10px;
+      font-weight:600;
+      font-size:0.75rem;
+      color:#fff;
+      flex-shrink:0;
+      min-width:80px;
+      text-align:center;
+    }
+    .risk-badge.low{background:var(--low-chip);}
+    .risk-badge.mid{background:var(--mid-chip);}
+    .risk-badge.high{background:var(--high-chip);}
+
+    .app-body{padding:32px;}
+    .field-label{font-weight:600;font-size:0.92rem;color:#1e40af;}
+    .input-group-text{background:#f8fafc;border:1px solid var(--border);color:var(--muted);font-size:0.9rem;}
+    .form-control{
+      background:#ffffff;
+      border:1px solid var(--border);
+      color:var(--text);
+      transition:all 0.2s ease;
+    }
+    .form-control::placeholder{color:#94a3b8;}
     .form-control:focus{
-      background:rgba(255,255,255,0.1);
-      border-color:rgba(142,123,255,.6);
-      box-shadow:0 0 0 .2rem rgba(142,123,255,.15);
+      background:#ffffff;
+      border-color:#3b82f6;
+      box-shadow:0 0 0 .25rem rgba(59,130,246,.15);
       color:var(--text);
     }
 
@@ -77,20 +151,36 @@ HTML_TEMPLATE = """
       background:linear-gradient(135deg,var(--brand),var(--brand-2));
       border:none;
       font-weight:700;
-      box-shadow:0 8px 30px rgba(103,80,240,.35);
+      padding:10px 28px;
+      box-shadow:0 4px 14px rgba(30,64,175,.3);
+      transition:all 0.2s ease;
     }
-    .btn-primary:hover{filter:brightness(1.07);}
+    .btn-primary:hover{
+      filter:brightness(1.1);
+      transform:translateY(-1px);
+      box-shadow:0 6px 20px rgba(30,64,175,.4);
+    }
     .btn-outline-secondary{
-      color:var(--text);border-color:var(--border);
+      color:var(--text);
+      border-color:var(--border);
+      background:#ffffff;
+      padding:10px 28px;
+      font-weight:600;
+      transition:all 0.2s ease;
     }
-    .btn-outline-secondary:hover{background:rgba(255,255,255,0.08);}
+    .btn-outline-secondary:hover{
+      background:#f1f5f9;
+      border-color:#94a3b8;
+      color:var(--text);
+    }
 
     .soft-divider{height:1px;background:var(--border);margin:1.25rem 0 1.5rem;}
 
     .result{
-      border-radius:16px;padding:20px 22px;
+      border-radius:16px;padding:24px;
       border:1px solid var(--border);
       animation:slideIn .3s ease-out;
+      margin-top:8px;
     }
     @keyframes slideIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
     .low{background:var(--low-bg);}
@@ -116,57 +206,88 @@ HTML_TEMPLATE = """
       <h3>Dự đoán nguy cơ thai sản</h3>
     </div>
 
+    <div class="main-layout">
+      <div class="left-sidebar">
+        <div class="sidebar-title">
+          Thông tin cơ bản
+        </div>
+        <div class="info-item">
+          <strong>Tuổi</strong>
+          Tuổi mang thai
+        </div>
+        <div class="info-item">
+          <strong>Đường huyết</strong>
+          Nồng độ glucose (mmol/L)
+        </div>
+        <div class="info-item">
+          <strong>Huyết áp tâm thu</strong>
+          Áp lực khi tim co bóp (mmHg)
+        </div>
+        <div class="info-item">
+          <strong>Huyết áp tâm trương</strong>
+          Áp lực khi tim giãn nở (mmHg)
+        </div>
+        <div class="info-item">
+          <strong>Nhịp tim</strong>
+          Số nhịp tim đập mỗi phút (bpm)
+        </div>
+      </div>
+
     <div class="app-body">
-      {% if is_post and error_msg %}
+      {% if error_msg %}
         <div class="alert alert-warning mb-3 py-2">{{ error_msg }}</div>
       {% endif %}
 
       <form method="POST" class="row g-3" novalidate>
-        <div class="col-md-6">
-          <label class="form-label field-label">Tuổi</label>
-          <div class="input-group">
-            <input type="number" name="age" min="10" max="60" required placeholder="VD: 28" class="form-control">
-            <span class="input-group-text">tuổi</span>
+          <div class="col-md-6">
+            <label class="form-label field-label">Tuổi</label>
+            <div class="input-group">
+              <input type="number" name="age" min="10" max="60" required placeholder="VD: 27" class="form-control">
+              <span class="input-group-text">tuổi</span>
+            </div>
           </div>
-        </div>
 
-        <div class="col-md-6">
-          <label class="form-label field-label">Đường huyết</label>
-          <div class="input-group">
-            <input type="number" name="bs" step="0.1" min="3" max="25" required placeholder="VD: 7.2" class="form-control">
-            <span class="input-group-text">mmol/L</span>
+          <div class="col-md-6">
+            <label class="form-label field-label">Nhịp tim</label>
+            <div class="input-group">
+              <input type="number" name="heart_rate" min="40" max="220" required placeholder="VD: 76" class="form-control">
+              <span class="input-group-text">bpm</span>
+            </div>
           </div>
-        </div>
 
-        <div class="col-md-6">
-          <label class="form-label field-label">Huyết áp tâm thu</label>
-          <div class="input-group">
-            <input type="number" name="systolic_bp" step="0.1" min="70" max="250" required placeholder="VD: 120" class="form-control">
-            <span class="input-group-text">mmHg</span>
+          <div class="col-md-6">
+            <label class="form-label field-label">Huyết áp tâm thu</label>
+            <div class="input-group">
+              <input type="number" name="systolic_bp" step="0.1" min="70" max="250" required placeholder="VD: 120" class="form-control">
+              <span class="input-group-text">mmHg</span>
+            </div>
           </div>
-        </div>
 
-        <div class="col-md-6">
-          <label class="form-label field-label">Huyết áp tâm trương</label>
-          <div class="input-group">
-            <input type="number" name="diastolic_bp" step="0.1" min="40" max="150" required placeholder="VD: 80" class="form-control">
-            <span class="input-group-text">mmHg</span>
+          <div class="col-md-6">
+            <label class="form-label field-label">Huyết áp tâm trương</label>
+            <div class="input-group">
+              <input type="number" name="diastolic_bp" step="0.1" min="40" max="150" required placeholder="VD: 80" class="form-control">
+              <span class="input-group-text">mmHg</span>
+            </div>
           </div>
-        </div>
 
-        <div class="col-md-6">
-          <label class="form-label field-label">Nhịp tim</label>
-          <div class="input-group">
-            <input type="number" name="heart_rate" min="40" max="220" required placeholder="VD: 75" class="form-control">
-            <span class="input-group-text">bpm</span>
+          <div class="col-md-6">
+            <label class="form-label field-label">Đường huyết</label>
+            <div class="input-group">
+              <input type="number" name="bs" step="0.1" min="3" max="25" required placeholder="VD: 7.5" class="form-control">
+              <span class="input-group-text">mmol/L</span>
+            </div>
           </div>
-        </div>
 
-        <div class="col-12 d-flex gap-2 mt-2">
-          <button type="submit" class="btn btn-primary px-4">Dự đoán</button>
-          <button type="reset" class="btn btn-outline-secondary">Xóa</button>
-        </div>
-      </form>
+          <div class="col-md-6 d-flex align-items-end gap-3">
+            <button type="submit" class="btn btn-primary px-4 flex-grow-1">
+              Dự đoán
+            </button>
+            <button type="reset" class="btn btn-outline-secondary px-4">
+              Xóa
+            </button>
+          </div>
+        </form>
 
       {% if show_result %}
         <div class="soft-divider"></div>
@@ -175,6 +296,25 @@ HTML_TEMPLATE = """
         </div>
       {% endif %}
     </div>
+
+    <div class="right-sidebar">
+      <div class="sidebar-title">
+        Mức nguy cơ
+      </div>
+      <div class="risk-item">
+        <span class="risk-badge low">Thấp</span>
+        <span>Chỉ số bình thường</span>
+      </div>
+      <div class="risk-item">
+        <span class="risk-badge mid">Trung bình</span>
+        <span>Cần theo dõi</span>
+      </div>
+      <div class="risk-item">
+        <span class="risk-badge high">Cao</span>
+        <span>Can thiệp y tế ngay</span>
+      </div>
+    </div>
+  </div>
 
     <div class="foot">CT312 - Khai khoáng dữ liệu - Đề tài 09</div>
   </div>
@@ -190,18 +330,30 @@ def predict():
     risk_class = None
     error_msg = None
     show_result = False
-    is_post = (request.method == "POST")
 
-    if is_post:
+    # Lấy kết quả từ session (nếu có) rồi xóa ngay
+    if 'result' in session:
+        result = session.pop('result')
+        risk_class = session.pop('risk_class')
+        show_result = True
+    
+    if 'error_msg' in session:
+        error_msg = session.pop('error_msg')
+
+    if request.method == "POST":
         # Chỉ xử lý khi form có đầy đủ key
         required_keys = ("age", "systolic_bp", "diastolic_bp", "bs", "heart_rate")
         form = request.form
 
         missing = [k for k in required_keys if not form.get(k)]
-        if missing:
+        # Kiểm tra xem có ít nhất 1 trường được điền không
+        has_any_data = any(form.get(k) for k in required_keys)
+        
+        if missing and has_any_data:
             # Người dùng đã submit nhưng thiếu dữ liệu
-            error_msg = "Dữ liệu không hợp lệ. Vui lòng nhập lại."
-        else:
+            session['error_msg'] = "Dữ liệu không hợp lệ. Vui lòng nhập lại."
+            return redirect(url_for('predict'))
+        elif not missing:
             try:
                 age = float(form.get("age", "").strip())
                 systolic_bp = float(form.get("systolic_bp", "").strip())
@@ -222,16 +374,21 @@ def predict():
                 }
 
                 if int(prediction) in mapping:
-                    result, risk_class = mapping[int(prediction)]
-                    show_result = True
+                    result_text, result_class = mapping[int(prediction)]
+                    session['result'] = result_text
+                    session['risk_class'] = result_class
+                    return redirect(url_for('predict'))
                 else:
-                    error_msg = "Kết quả không xác định từ mô hình."
+                    session['error_msg'] = "Kết quả không xác định từ mô hình."
+                    return redirect(url_for('predict'))
             except ValueError:
                 # Lỗi chuyển kiểu số (nhập sai định dạng)
-                error_msg = "Dữ liệu không hợp lệ. Vui lòng nhập lại."
+                session['error_msg'] = "Dữ liệu không hợp lệ. Vui lòng nhập lại."
+                return redirect(url_for('predict'))
             except Exception:
                 # Lỗi không mong muốn khác
-                error_msg = "Đã xảy ra lỗi khi dự đoán. Vui lòng thử lại."
+                session['error_msg'] = "Đã xảy ra lỗi khi dự đoán. Vui lòng thử lại."
+                return redirect(url_for('predict'))
 
     return render_template_string(
         HTML_TEMPLATE,
@@ -239,7 +396,6 @@ def predict():
         risk_class=risk_class,
         error_msg=error_msg,
         show_result=show_result,
-        is_post=is_post,
     )
 
 if __name__ == "__main__":
