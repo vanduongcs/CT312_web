@@ -242,7 +242,7 @@ HTML_TEMPLATE = """
           <div class="col-md-6">
             <label class="form-label field-label">Tuổi</label>
             <div class="input-group">
-              <input type="number" name="age" min="10" max="60" required placeholder="VD: 27" class="form-control">
+              <input type="number" name="age" min="10" max="60" required placeholder="VD: 27" class="form-control" value="{{ form_data.age | default('') }}">
               <span class="input-group-text">tuổi</span>
             </div>
           </div>
@@ -250,7 +250,7 @@ HTML_TEMPLATE = """
           <div class="col-md-6">
             <label class="form-label field-label">Nhịp tim</label>
             <div class="input-group">
-              <input type="number" name="heart_rate" min="40" max="220" required placeholder="VD: 76" class="form-control">
+              <input type="number" name="heart_rate" min="40" max="220" required placeholder="VD: 76" class="form-control" value="{{ form_data.heart_rate | default('') }}">
               <span class="input-group-text">bpm</span>
             </div>
           </div>
@@ -258,7 +258,7 @@ HTML_TEMPLATE = """
           <div class="col-md-6">
             <label class="form-label field-label">Huyết áp tâm thu</label>
             <div class="input-group">
-              <input type="number" name="systolic_bp" step="0.1" min="70" max="250" required placeholder="VD: 120" class="form-control">
+              <input type="number" name="systolic_bp" step="0.1" min="70" max="250" required placeholder="VD: 120" class="form-control" value="{{ form_data.systolic_bp | default('') }}">
               <span class="input-group-text">mmHg</span>
             </div>
           </div>
@@ -266,7 +266,7 @@ HTML_TEMPLATE = """
           <div class="col-md-6">
             <label class="form-label field-label">Huyết áp tâm trương</label>
             <div class="input-group">
-              <input type="number" name="diastolic_bp" step="0.1" min="40" max="150" required placeholder="VD: 80" class="form-control">
+              <input type="number" name="diastolic_bp" step="0.1" min="40" max="150" required placeholder="VD: 80" class="form-control" value="{{ form_data.diastolic_bp | default('') }}">
               <span class="input-group-text">mmHg</span>
             </div>
           </div>
@@ -274,7 +274,7 @@ HTML_TEMPLATE = """
           <div class="col-md-6">
             <label class="form-label field-label">Đường huyết</label>
             <div class="input-group">
-              <input type="number" name="bs" step="0.1" min="3" max="25" required placeholder="VD: 7.5" class="form-control">
+              <input type="number" name="bs" step="0.1" min="3" max="25" required placeholder="VD: 7.5" class="form-control" value="{{ form_data.bs | default('') }}">
               <span class="input-group-text">mmol/L</span>
             </div>
           </div>
@@ -283,9 +283,9 @@ HTML_TEMPLATE = """
             <button type="submit" class="btn btn-primary px-4 flex-grow-1">
               Dự đoán
             </button>
-            <button type="reset" class="btn btn-outline-secondary px-4">
+            <a href="{{ url_for('clear') }}" class="btn btn-outline-secondary px-4">
               Xóa
-            </button>
+            </a>
           </div>
         </form>
 
@@ -351,15 +351,27 @@ def predict():
         
         if missing and has_any_data:
             # Người dùng đã submit nhưng thiếu dữ liệu
+            # Lưu giá trị đã nhập để hiển thị lại
+            session['form_data'] = {k: form.get(k, '').strip() for k in required_keys}
             session['error_msg'] = "Dữ liệu không hợp lệ. Vui lòng nhập lại."
             return redirect(url_for('predict'))
         elif not missing:
             try:
-                age = float(form.get("age", "").strip())
-                systolic_bp = float(form.get("systolic_bp", "").strip())
-                diastolic_bp = float(form.get("diastolic_bp", "").strip())
-                bs = float(form.get("bs", "").strip())
-                heart_rate = float(form.get("heart_rate", "").strip())
+                # Lưu tất cả giá trị form vào session
+                form_data = {
+                    'age': form.get('age', '').strip(),
+                    'systolic_bp': form.get('systolic_bp', '').strip(),
+                    'diastolic_bp': form.get('diastolic_bp', '').strip(),
+                    'bs': form.get('bs', '').strip(),
+                    'heart_rate': form.get('heart_rate', '').strip(),
+                }
+                session['form_data'] = form_data
+                
+                age = float(form_data['age'])
+                systolic_bp = float(form_data['systolic_bp'])
+                diastolic_bp = float(form_data['diastolic_bp'])
+                bs = float(form_data['bs'])
+                heart_rate = float(form_data['heart_rate'])
 
                 # Tính MAP
                 map_value = diastolic_bp + (systolic_bp - diastolic_bp) / 3.0
@@ -377,16 +389,19 @@ def predict():
                     result_text, result_class = mapping[int(prediction)]
                     session['result'] = result_text
                     session['risk_class'] = result_class
+                    # Giữ form_data trong session để input không bị xóa
                     return redirect(url_for('predict'))
                 else:
                     session['error_msg'] = "Kết quả không xác định từ mô hình."
                     return redirect(url_for('predict'))
             except ValueError:
-                # Lỗi chuyển kiểu số (nhập sai định dạng)
+                # Lỗi chuyển kiểu số - lưu giá trị đã nhập
+                session['form_data'] = {k: form.get(k, '').strip() for k in required_keys}
                 session['error_msg'] = "Dữ liệu không hợp lệ. Vui lòng nhập lại."
                 return redirect(url_for('predict'))
             except Exception:
-                # Lỗi không mong muốn khác
+                # Lỗi không mong muốn - lưu giá trị đã nhập
+                session['form_data'] = {k: form.get(k, '').strip() for k in required_keys}
                 session['error_msg'] = "Đã xảy ra lỗi khi dự đoán. Vui lòng thử lại."
                 return redirect(url_for('predict'))
 
@@ -396,7 +411,17 @@ def predict():
         risk_class=risk_class,
         error_msg=error_msg,
         show_result=show_result,
+        form_data=session.get('form_data', {}),
     )
+
+@app.route('/clear')
+def clear():
+    """Xóa toàn bộ dữ liệu session và quay lại trang chủ"""
+    session.pop('form_data', None)
+    session.pop('result', None)
+    session.pop('risk_class', None)
+    session.pop('error_msg', None)
+    return redirect(url_for('predict'))
 
 if __name__ == "__main__":
     # Chạy Flask
